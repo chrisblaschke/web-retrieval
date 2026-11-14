@@ -292,18 +292,30 @@ def json_doc(body: bytes) -> dict:
     return {"title": None, "content": f"```json\n{text.strip()}\n```"}
 
 
-# Consume fences in the same scan so code comments cannot become headings; keep original offsets.
-HEADING = re.compile(
-    r"^(#{1,6})\s+(.+?)\s*#*\s*$"
-    r"|^[ \t]{0,3}(?P<fence>`{3,}|~{3,})[^\n]*\n[\s\S]*?"
-    r"(?:^[ \t]{0,3}(?P=fence)[ \t]*$|\Z)",
-    re.M,
-)
+HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.M)
+
+
+def _heading_matches(text: str):
+    """Scan lines once, excluding fences without changing original character offsets."""
+    fence = ""
+    for line in re.finditer(r"[^\n]+\n?|\n", text):
+        # Possessive runs cannot backtrack into the info string on long marker lines.
+        marker = re.match(r" {0,3}(`{3,}+|~{3,}+)(.*)", line.group())
+        if fence:
+            if (marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence)
+                    and not marker[2].strip(" \t\r")):
+                fence = ""
+        elif marker and (marker[1][0] == "~" or "`" not in marker[2]):
+            fence = marker[1]
+        else:
+            heading = HEADING.match(text, line.start(), line.end())
+            if heading:
+                yield heading
 
 
 def headings(text: str, limit: int = 80) -> list[dict]:
     """Markdown headings with their character offsets, for picking a section or an offset."""
-    return [{"level": len(m.group(1)), "title": plain(m.group(2))[:120], "offset": m.start()} for m in HEADING.finditer(text) if m.group(1)][:limit]
+    return [{"level": len(m.group(1)), "title": plain(m.group(2))[:120], "offset": m.start()} for m in _heading_matches(text)][:limit]
 
 
 def plain(md: str) -> str:
@@ -315,7 +327,7 @@ def section(text: str, name: str) -> str | None:
     """The text under the first heading containing `name` (case-insensitive), up to the next
     heading of the same or a higher level."""
     want = name.strip().lower().lstrip("#").strip()
-    marks = [m for m in HEADING.finditer(text) if m.group(1)]
+    marks = list(_heading_matches(text))
     for i, m in enumerate(marks):
         if want and want in plain(m.group(2)).lower():
             level = len(m.group(1))

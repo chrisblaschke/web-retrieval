@@ -121,10 +121,14 @@ def test_pdfium_operations_are_serialized(monkeypatch):
     assert calls == 2
 
 
-def test_markdown_sections_ignore_fenced_comments():
-    install = ("## Install\n\nInstall the package.\n\n```sh\n"
-               "# Fetch dependencies\nuv sync\n```\n\nThen configure it.")
-    text = "# Guide\n\n" + install + "\n\n## Usage\n\nRun it."
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+@pytest.mark.parametrize("opener,closer", [("```", "```"), ("```", "````"), ("~~~", "~~~~")])
+def test_markdown_sections_ignore_fenced_comments(newline, opener, closer):
+    install = (f"## Install\n\nInstall the package.\n\n{opener}sh\n"
+               f"# Fetch dependencies\nuv sync\n{closer}\n\nThen configure it.")
+    install = install.replace("\n", newline)
+    text = ("# Guide" + newline * 2 + install + newline * 2 +
+            "## Usage" + newline * 2 + "Run it.")
     assert content.section(text, "install") == install
     assert content.headings(text) == [
         {"level": 1, "title": "Guide", "offset": 0},
@@ -132,6 +136,16 @@ def test_markdown_sections_ignore_fenced_comments():
         {"level": 2, "title": "Usage", "offset": text.index("## Usage")},
     ]
     assert content.section(text, "fetch dependencies") is None
+    assert content.section(text, "usage") == "## Usage" + newline * 2 + "Run it."
+
+
+def test_inline_triple_backticks_do_not_hide_headings():
+    text = "# Guide\n\n```inline code```\n\n## Usage\n\nRun it."
+    assert content.headings(text) == [
+        {"level": 1, "title": "Guide", "offset": 0},
+        {"level": 2, "title": "Usage", "offset": text.index("## Usage")},
+    ]
+    assert content.section(text, "usage") == "## Usage\n\nRun it."
 
 
 def test_focus_truncated_best_passage_fills_budget():
