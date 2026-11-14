@@ -292,12 +292,18 @@ def json_doc(body: bytes) -> dict:
     return {"title": None, "content": f"```json\n{text.strip()}\n```"}
 
 
-HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.M)
+# Consume fences in the same scan so code comments cannot become headings; keep original offsets.
+HEADING = re.compile(
+    r"^(#{1,6})\s+(.+?)\s*#*\s*$"
+    r"|^[ \t]{0,3}(?P<fence>`{3,}|~{3,})[^\n]*\n[\s\S]*?"
+    r"(?:^[ \t]{0,3}(?P=fence)[ \t]*$|\Z)",
+    re.M,
+)
 
 
 def headings(text: str, limit: int = 80) -> list[dict]:
     """Markdown headings with their character offsets, for picking a section or an offset."""
-    return [{"level": len(m.group(1)), "title": plain(m.group(2))[:120], "offset": m.start()} for m in HEADING.finditer(text)][:limit]
+    return [{"level": len(m.group(1)), "title": plain(m.group(2))[:120], "offset": m.start()} for m in HEADING.finditer(text) if m.group(1)][:limit]
 
 
 def plain(md: str) -> str:
@@ -309,7 +315,7 @@ def section(text: str, name: str) -> str | None:
     """The text under the first heading containing `name` (case-insensitive), up to the next
     heading of the same or a higher level."""
     want = name.strip().lower().lstrip("#").strip()
-    marks = list(HEADING.finditer(text))
+    marks = [m for m in HEADING.finditer(text) if m.group(1)]
     for i, m in enumerate(marks):
         if want and want in plain(m.group(2)).lower():
             level = len(m.group(1))
@@ -471,6 +477,7 @@ def focus(text: str, objective: str, budget: int) -> tuple[str, bool]:
             if not keep:
                 keep.append(i)
                 parts[i] = piece[:budget]
+                break
             continue
         keep.append(i)
         used += len(piece) + len(sep)

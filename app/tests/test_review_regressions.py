@@ -121,6 +121,26 @@ def test_pdfium_operations_are_serialized(monkeypatch):
     assert calls == 2
 
 
+def test_markdown_sections_ignore_fenced_comments():
+    install = ("## Install\n\nInstall the package.\n\n```sh\n"
+               "# Fetch dependencies\nuv sync\n```\n\nThen configure it.")
+    text = "# Guide\n\n" + install + "\n\n## Usage\n\nRun it."
+    assert content.section(text, "install") == install
+    assert content.headings(text) == [
+        {"level": 1, "title": "Guide", "offset": 0},
+        {"level": 2, "title": "Install", "offset": text.index("## Install")},
+        {"level": 2, "title": "Usage", "offset": text.index("## Usage")},
+    ]
+    assert content.section(text, "fetch dependencies") is None
+
+
+def test_focus_truncated_best_passage_fills_budget():
+    earlier = "needle background " + "context " * 90
+    best = "needle evidence " * 60
+    text = earlier + "\n\n" + best
+    assert content.focus(text, "needle evidence", budget=800) == (best[:800], True)
+
+
 @pytest.fixture
 def gateway(tmp_path, monkeypatch):
     from retrieval.service import Service
