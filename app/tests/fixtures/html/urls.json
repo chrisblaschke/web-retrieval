@@ -1,0 +1,12 @@
+{
+ "python-asyncio-task": "https://docs.python.org/3/library/asyncio-task.html",
+ "wikipedia-web-scraping": "https://en.wikipedia.org/wiki/Web_scraping",
+ "sqlite-wal": "https://www.sqlite.org/wal.html",
+ "effective-go": "https://go.dev/doc/effective_go",
+ "hn-front": "https://news.ycombinator.com/",
+ "bbc-technology": "https://www.bbc.com/news/technology",
+ "rust-blog": "https://blog.rust-lang.org/",
+ "github-bun-releases": "https://github.com/oven-sh/bun/releases",
+ "github-searxng-repo": "https://github.com/searxng/searxng",
+ "vercel-pricing": "https://vercel.com/pricing"
+}

@@ -1,0 +1,8 @@
+# Resolver for the jail network, which has no route out. Forwards to Docker's embedded DNS on the
+# edge network. Name resolution is all the jail gets: connections still have to go through the
+# egress proxy, which refuses non-public addresses.
+.:53 {
+    forward . 127.0.0.11
+    cache 300
+    errors
+}

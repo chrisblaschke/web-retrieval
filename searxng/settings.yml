@@ -1,0 +1,68 @@
+# SearXNG for the web-retrieval stack. Inherits SearXNG's defaults; only these keys change.
+# secret_key comes from the SEARXNG_SECRET environment variable (.env).
+use_default_settings: true
+
+general:
+  instance_name: web-retrieval
+
+server:
+  limiter: false      # private backend; the bot limiter would throttle our own agents
+  image_proxy: false
+  public_instance: false
+
+search:
+  formats: [html, json]
+  safe_search: 0
+
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 8.0
+  pool_connections: 100
+  pool_maxsize: 20
+
+# General search fans out to several independent upstreams, so one engine's CAPTCHA can't
+# fail a query: DuckDuckGo's HTML page and its d.js API (separate rate limits), GMX
+# (Google-like results) and Yandex. The gateway allowlists exactly these (SEARXNG_TEXT_ENGINES),
+# checks each with a multi-term relevance canary and benches failing ones with backoff.
+# These defaults need testing from your IP. Bing passed a prior canary but often
+# answers only the first word ("declared vs observed state ..." -> dictionary pages for
+# "declared"); Yahoo and PrivacyWall (also Bing-backed) ignore query terms the same way.
+# Engine availability varies with source IP and changes over time.
+# Do not enable an engine based on HTTP status or result count alone.
+engines:
+  - name: bing
+    disabled: true
+  - name: duckduckgo web
+    disabled: false
+  - name: gmx
+    disabled: false
+  - name: yandex
+    disabled: false
+  - name: yahoo
+    disabled: true
+  - name: mojeek
+    disabled: true
+  - name: google cse
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: duckduckgo
+    disabled: false
+  - name: google
+    disabled: true
+  - name: qwant
+    disabled: true
+  - name: startpage
+    disabled: true
+  - name: wikidata      # infobox data; its timeouts held whole queries to the 4 s limit
+    disabled: true
+  # news
+  - name: yahoo news
+    disabled: false
+    inactive: false
+  - name: brave.news
+    disabled: true
+  - name: google news
+    disabled: true
+  - name: reuters
+    disabled: true
