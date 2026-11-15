@@ -192,6 +192,9 @@ Image, audio, video and Office extraction are unsupported. Dates from pages or
 engines may be missing or wrong. Cache size is a pruning target, not a strict
 quota. No production load or availability guarantee is offered.
 
+Documents cached before a validation fix are not revalidated. Use `fresh: true`
+to bypass them until they expire.
+
 ## Tests and updates
 
 With Python 3.13 and uv:

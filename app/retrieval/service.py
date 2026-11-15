@@ -359,6 +359,12 @@ class Service:
             raise
         self.note("crawl4ai", ms(t), True)
         route.append({"step": "crawl4ai", "reason": reason, "ms": ms(t), "status": out["status"], "html_bytes": len(out["html"])})
+        challenge = content.looks_blocked(out["html"], self.s.thin_chars)
+        resp = Response(canon, out["final_url"], out["status"], "text/html", out["html"].encode())
+        if challenge or resp.status in (401, 403):
+            raise self._refused(resp, challenge)
+        if resp.status >= 400:
+            raise self._status_failure(resp)
         return out
 
     @staticmethod
@@ -565,9 +571,9 @@ class Service:
                     if not challenge and not content.looks_js_shell(resp.body, chars, self.s.thin_chars):
                         return http_doc
                     why = "an anti-bot challenge" if challenge else "a page that builds its content with JavaScript"
+                    http_doc["incomplete"] = True
+                    http_doc["warning"] = f"{why}: {chars} chars of text came back over HTTP; {BROWSER_HINT}"
                     if not self._can_render(render):
-                        http_doc["incomplete"] = True
-                        http_doc["warning"] = f"{why}: {chars} chars of text came back over HTTP; {BROWSER_HINT}"
                         return http_doc
                     reason = why
 
@@ -580,7 +586,6 @@ class Service:
                 http_doc["warning"] = f"render failed ({e.kind}); returning the thin HTTP extraction; {BROWSER_HINT}"
                 return http_doc
             raise Failure("blocked" if e.kind == "blocked" else "render_failed", f"{e}; {BROWSER_HINT}") from None
-        self._store_raw(canon, True, r["final_url"], r["html"].encode())
         doc, step = await asyncio.to_thread(self._html, r["html"], r["final_url"]) if r["html"] else ({"content": "", "backend": "crawl4ai"}, {})
         route.append({**step, "on": "rendered"})
         backend = "crawl4ai+" + doc.pop("backend")
@@ -592,6 +597,12 @@ class Service:
         if http_doc and not challenge and len(http_doc["content"]) > len(doc.get("content") or ""):
             route.append({"step": "choose", "picked": "http extraction", "why": "longer than the rendered one"})
             return http_doc
+        chars = content.text_len(doc.get("content") or "")
+        if content.looks_js_shell(r["html"], chars, self.s.thin_chars):
+            doc["incomplete"] = True
+            doc["warning"] = f"the rendered page still needs JavaScript: {chars} chars of text came back; {BROWSER_HINT}"
+        else:
+            self._store_raw(canon, True, r["final_url"], r["html"].encode())
         meta = r.get("metadata") or {}
         doc["title"] = doc.get("title") or meta.get("title")
         return {**doc, "final_url": r["final_url"], "http_status": r["status"], "content_type": "text/html", "backend": backend}
@@ -637,7 +648,8 @@ class Service:
         }
 
     def _store_raw(self, canon: str, rendered: bool, final_url: str, body: bytes, cache_control: str = ""):
-        if "no-store" not in cache_control.lower() and len(body) <= RAW_CACHE_MAX:
+        if ("no-store" not in cache_control.lower() and len(body) <= RAW_CACHE_MAX
+                and not content.looks_blocked(body, self.s.thin_chars)):
             self.cache.set("raw", f"{canon}|{int(rendered)}",
                            {"final_url": final_url, "html": content.decode(body)}, self.s.page_ttl)
 
@@ -686,6 +698,10 @@ class Service:
         key = f"{canon}|{int(rendered)}"
         if not fresh and (hit := self.cache.get("raw", key)):
             route.append({"step": "cache", "rendered": rendered})
+            if content.looks_blocked(hit["html"], self.s.thin_chars):
+                if not rendered and self._can_render(render):
+                    return None, None, False
+                raise Failure("needs_browser", f"the cached page is an anti-bot challenge; {BROWSER_HINT}")
             return hit["html"], hit["final_url"], True
         await self._robots(canon, route)
         if rendered:
@@ -702,8 +718,8 @@ class Service:
                 raise Failure.of(e) from None
             return None, None, False
         kind = content.kind_of(resp.content_type, resp.body, resp.final_url)
-        if resp.status >= 400:
-            challenge = kind == "html" and content.looks_blocked(resp.body, self.s.thin_chars)
+        challenge = kind == "html" and content.looks_blocked(resp.body, self.s.thin_chars)
+        if challenge or resp.status >= 400:
             if challenge or resp.status in (401, 403):
                 if self._can_render(render):
                     return None, None, False
